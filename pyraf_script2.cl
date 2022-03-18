@@ -20,15 +20,7 @@ import random
 import multiprocessing as mp
 import pickle
 from scipy.signal import find_peaks 
-#
-# defining fonts
-#
-#mpl.rcParams['font.family'] = 'sans-serif'
-#mpl.rcParams['font.style'] = 'oblique'
-#mpl.rcParams['font.weight'] = 500
-#mpl.rcParams['font.stretch'] = 'semi-condensed'
-#mpl.rcParams['font.sans-serif'] = 'Arial'
-mpl.rcParams.update(mpl.rcParamsDefault)
+
 #
 # Defining constants
 #
@@ -98,7 +90,7 @@ t.close()
 cl < lst.cl
 cat *.txt > fxcor.txt
 
-#2) leer fxcor.txt como tabla ascii y separar resultados ideales y no-ideales. tabla ideales con promedio y propagacion de error can
+#2) leer fxcor.txt como tabla ascii y separar resultados ideales y no-ideales.  can: tabla ideales con promedio y propagacion de error
 z = Table.read("fxcor.txt",format="ascii")
 indef = []
 lst = []
@@ -172,7 +164,7 @@ for i in range(len(lst)):
 #can.remove_row(index)           
 #lst.remove_row(index)  
 
-#4) generar linea de codigo para iraf lst1.cl, sample regions en base a mediana de can["col13"]. 
+#4) generar linea de codigo para iraf lst1.cl, sample regions en base a mediana de can["col13"] (assuming all galaxies are near the cluster redshift, then extend the range). 
 
 z_init = np.median(can["col13"])/c 
 t = open("lst1.cl","w") 
@@ -395,7 +387,7 @@ for i in range(100):
     crt.add_row(dts[0])
 crt.remove_row(0)
 
-#6.B interactive Oligarchy 
+#6.B interactive Oligarchy <-- this is an alternative helpful when analyzing problematic clusters
 
 can = Table.read("fxcor_can.cat",format="csv")
 lst = Table.read("fxcor.cat",format="csv")
@@ -532,7 +524,7 @@ crt.remove_row(0)
 
 #crt.write("fxcor_prom.cat",format="csv")
 
-for i in list(range(1,41))+list(range(51,84)): 
+for i in list(range(1,41))+list(range(51,84)):   #if there are still non ideal results, send them to recheck as low signals (check spectra interactively first)
     obj = "../../fits/spt"+cluster+"_"+str(i)+"_clean.fits" 
     if obj not in crt["col2"] and int(i)!=50 and int(i) not in bn["col1"]: 
         print(i) 
@@ -553,7 +545,7 @@ magl = []
 for i in crt["col2"]: 
     ext = i.split("_")[1] 
     header = fits.getheader(i) 
-    ra, dec , mag= header['RAOBJ'], header['DECOBJ'], header['DES_MAG'] 
+    ra, dec , mag= header['RAOBJ'], header['DECOBJ'], header['DES_MAG']     #DES_MAG taken from DESY3, added to headers with IRAF hedit
     ral += [np.around(ra*15,5)] 
     decl += [dec]
     magl += [mag] 
@@ -573,80 +565,6 @@ crt.rename_column("col14","V_ERR")
 
 #crt.write("fxcor_prom.cat",format="csv")
 #crt.write("../../../cluster_redshifts/fxcor_"+str(cluster.split("-")[0])+"_prom.cat",format="csv")
-
-#) separar resultados por mascara
-msk1 = []
-msk2 = []
-for i in range(len(crt)):
-    cut = crt["EXT"][i] 
-    ext = cut.split("_")[1]
-    if int(ext) <= 49:
-        msk1 += [np.array(crt[i])]
-    elif int(ext) >= 50:
-        msk2 += [np.array(crt[i])]
-msk1 = Table(np.array(msk1))
-msk2 = Table(np.array(msk2))
-
-#11) hacer histograma velocidad de dispersion
-clip = Table.read("fxcor_"+str(cluster.split("-")[0])+"_prom_clipped.csv")
-x = clip["col13"]
-x = np.array(x,dtype="float")
-x.sort()
-x = x - zcl 
-upper = int((np.around(x[len(x)-1]/250)+1)*250)
-lower = int((np.around(x[0]/250)-1)*250)
-bin = int(np.around((upper-lower)/250))
-plt.clf()
-plt.hist(x,bins=bin,range=(lower,upper),color="blue")
-plt.title("SPTCL"+cluster+" ("+str(len(clip))+" obj) bin=250km/s z="+str(np.around((zcl/c),6)))
-plt.savefig("v_disp_"+str(cluster.split("-")[0])+"_as2.png")
-plt.show()
-
-#cumulos daniel
-cluster="0144-4807" 
-msk = "05_06" 
-z = Table.read("SPT-CLJ"+str(cluster)+".csv",format="csv") 
-z = z[np.array(z["zo"])>0] 
-z = z[np.array(z["err_zh"],dtype="float")>0] 
-crt = Table([[""],[""],[1.1],[1.1]],names=["col1","col2","col13","col14"],dtype=["<U15","<U37","float64","float64"]) 
-for i in range(len(z)): 
-    prom = float(z["zo"][i])*c 
-    err = float(z["err_zh"][i]) 
-    ext = "../../fits/spt"+str(cluster)+"_"+str(int(z["ext"][i]))+"_clean.fits" 
-    header = fits.getheader("../SPTCL"+str(cluster)+"_MSK"+str(msk)+"/fits/spt"+str(cluster)+"_"+str(int(z["ext"][i]))+".fits") 
-    obj = "Obj_ID:_"+str(header['ID']) 
-    res = Table([[obj],[ext],[prom],[err]],names=("col1","col2","col13","col14")) 
-    crt.add_row(res[0]) 
-crt.remove_row(0) 
-
-#)localizate last results from fxcor_rch.txt
-z_rch = Table.read("fxcor_rch.txt",format="ascii")
-cluster = z_rch["col2"][0].split("t")[2].split("_")[0]
-z_rch1 = []
-for i in range(100):
-    dts = z_rch[z_rch["col2"]=="../../fits/spt"+cluster+"_"+str(i)+"_clean.fits"]
-    if len(dts)==0:
-        continue
-    for j in ["A","B","C","D"]:
-        law = dts[dts["col3"]==j]
-        det = law[len(law)-1]
-        z_rch1 += [np.array((det))]
-z_rch1 = Table(np.array(z_rch1))
-z_rch1.write("fxcor_rch.txt",format="csv")
-
-#)get last result individual _int.txt
-z_rcch = Table.read("45_int.txt",format="ascii")
-cluster = z_rcch["col2"][0].split("t")[2].split("_")[0]
-z_rcch1 = []
-for i in range(100):
-    dts = z_rcch[z_rcch["col2"]=="../../fits/spt"+cluster+"_"+str(i)+"_clean.fits"]
-    if len(dts)==0:
-        continue
-    for j in ["A","B","C","D"]:
-        law = dts[dts["col3"]==j]
-        det = law[len(law)-1]
-        z_rcch1 += [np.array((det))]
-z_rcch1 = Table(np.array(z_rcch1))
 
 #) edit spectra to eliminate 7620A line
 mkdir original_fits
@@ -671,7 +589,6 @@ for j in range(100):
     hdul.writeto("spt"+cluster+"_"+str(j)+"_clean.fits",output_verify="ignore")
     hdul.close()
 
-#0522,2344,0151,2358,0144,0600,0451,0354,0439,0337,0111,0135,2100,0612,0550
              
 
 
